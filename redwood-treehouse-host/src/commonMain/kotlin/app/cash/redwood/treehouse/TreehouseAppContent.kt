@@ -500,6 +500,8 @@ private class ViewContentCodeBinding<A : AppService>(
 
   fun start() {
     bindingScope.launch(dispatchers.zipline) {
+      RdmaBridge.callsink = this@ViewContentCodeBinding
+
       val scopedAppService = serviceScope.apply(codeSession.appService)
       val treehouseUi = contentSource!!.get(scopedAppService)
       treehouseUiOrNull = treehouseUi
@@ -575,6 +577,8 @@ private class ViewContentCodeBinding<A : AppService>(
 
     if (canceled) return
     canceled = true
+
+    RdmaBridge.callsink = null
 
     hostAdapterOrNull?.close()
     hostAdapterOrNull = null

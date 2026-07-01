@@ -22,8 +22,22 @@ import kotlinx.serialization.json.put
 public object RdmaBridge : ChangesSink {
     @Volatile
     internal var callsink: ChangesSink? = null
+    @Volatile
+    internal var batchAccumulator: MutableList<Change>? = null
+
     public override fun sendChanges(changes: List<Change>) {
-        callsink?.sendChanges(changes)
+        val acc = synchronized(this) { batchAccumulator }
+        val all = if (acc == null) changes else acc + changes
+        batchAccumulator = null
+        callsink?.sendChanges(all)
+    }
+
+    @JvmStatic
+    public fun sendBatch(changes: List<Change>) {
+        val acc = batchAccumulator ?: synchronized(this) {
+            batchAccumulator ?: mutableListOf<Change>().also { batchAccumulator = it }
+        }
+        acc.addAll(changes)
     }
     @JvmStatic public fun createCreate(id: Int, tag: Int): Create = Create(Id(id), WidgetTag(tag))
     @JvmStatic public fun createAdd(id: Int, tag: Int, childId: Int, index: Int): ChildrenChange = ChildrenChange.Add(Id(id), ChildrenTag(tag), Id(childId), index)

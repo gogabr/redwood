@@ -58,6 +58,7 @@ internal class FastGuestProtocolAdapter(
   private var nextValue = Id.Root.value + 1
   private val widgets = JsMap<Int, ProtocolWidget>()
   private val removed = JsSet<Int>()
+  private var pinnedObjects: dynamic = js("[]")
 
   override val widgetSystem: WidgetSystem<Unit> =
     widgetSystemFactory.create(this, mismatchHandler)
@@ -105,6 +106,7 @@ internal class FastGuestProtocolAdapter(
     value: T,
   ) {
     val encodedValue = value?.let { json.encodeToDynamic(serializer, it) }
+    pinnedObjects.push(encodedValue)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, encodedValue)
   }
@@ -144,6 +146,7 @@ internal class FastGuestProtocolAdapter(
         }
       }
     }
+    pinnedObjects.push(elements)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     rdmaObj.appendModifierChange(id.value, elements)
   }
@@ -210,6 +213,7 @@ internal class FastGuestProtocolAdapter(
     removed.clear()
 
     rdmaObj.finishChanges()
+    pinnedObjects = js("[]")
   }
 
   private val childrenRemover: ProtocolWidget.ChildrenVisitor =

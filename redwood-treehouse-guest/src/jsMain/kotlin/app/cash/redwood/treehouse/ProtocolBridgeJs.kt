@@ -17,7 +17,6 @@ package app.cash.redwood.treehouse
 
 import app.cash.redwood.Modifier
 import app.cash.redwood.RedwoodCodegenApi
-import app.cash.redwood.protocol.Change
 import app.cash.redwood.protocol.ChangesSink
 import app.cash.redwood.protocol.ChildrenTag
 import app.cash.redwood.protocol.Event
@@ -32,8 +31,6 @@ import app.cash.redwood.protocol.guest.ProtocolWidget.Companion.INVALID_INDEX
 import app.cash.redwood.protocol.guest.ProtocolWidgetChildren
 import app.cash.redwood.protocol.guest.ProtocolWidgetSystemFactory
 import app.cash.redwood.widget.WidgetSystem
-import app.cash.zipline.asDynamicFunction
-import app.cash.zipline.sourceType
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -61,9 +58,6 @@ internal class FastGuestProtocolAdapter(
   private var nextValue = Id.Root.value + 1
   private val widgets = JsMap<Int, ProtocolWidget>()
   private val removed = JsSet<Int>()
-  private val changes = JsArray<Change>()
-  private lateinit var changesSinkService: ChangesSinkService
-  private lateinit var sendChanges: (service: ChangesSinkService, args: Array<*>) -> Any?
 
   override val widgetSystem: WidgetSystem<Unit> =
     widgetSystemFactory.create(this, mismatchHandler)
@@ -81,21 +75,12 @@ internal class FastGuestProtocolAdapter(
   }
 
   override fun initChangesSink(changesSink: ChangesSink) {
-    val changesSinkService = changesSink as ChangesSinkService
-    initChangesSink(
-      changesSinkService = changesSinkService,
-      sendChanges = changesSinkService.sourceType!!.functions
-        .single { "sendChanges" in it.signature }
-        .asDynamicFunction(),
-    )
   }
 
   internal fun initChangesSink(
     changesSinkService: ChangesSinkService,
     sendChanges: (service: ChangesSinkService, args: Array<*>) -> Any?,
   ) {
-    this.changesSinkService = changesSinkService
-    this.sendChanges = sendChanges
   }
 
   override fun nextId(): Id {
@@ -108,9 +93,8 @@ internal class FastGuestProtocolAdapter(
     id: Id,
     tag: WidgetTag,
   ) {
-    val id = id
-    val tag = tag
-    changes.push(js("""["create",{"id":id,"tag":tag}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendCreate(id.value, tag.value)
   }
 
   override fun <T> appendPropertyChange(
@@ -120,11 +104,9 @@ internal class FastGuestProtocolAdapter(
     serializer: KSerializer<T>,
     value: T,
   ) {
-    val id = id
-    val widget = widgetTag
-    val tag = propertyTag
     val encodedValue = value?.let { json.encodeToDynamic(serializer, it) }
-    changes.push(js("""["property",{"id":id,"widget":widget,"tag":tag,"value":encodedValue}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, encodedValue)
   }
 
   override fun appendPropertyChange(
@@ -133,11 +115,8 @@ internal class FastGuestProtocolAdapter(
     propertyTag: PropertyTag,
     value: Boolean,
   ) {
-    val id = id
-    val widget = widgetTag
-    val tag = propertyTag
-    val value = value
-    changes.push(js("""["property",{"id":id,"widget":widget,"tag":tag,"value":value}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, value)
   }
 
   override fun appendPropertyChange(
@@ -146,11 +125,8 @@ internal class FastGuestProtocolAdapter(
     propertyTag: PropertyTag,
     value: UInt,
   ) {
-    val id = id
-    val widget = widgetTag
-    val tag = propertyTag
-    val value = value.toDouble()
-    changes.push(js("""["property",{"id":id,"widget":widget,"tag":tag,"value":value}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, value.toLong())
   }
 
   override fun appendModifierChange(id: Id, value: Modifier) {
@@ -168,9 +144,8 @@ internal class FastGuestProtocolAdapter(
         }
       }
     }
-
-    val id = id
-    changes.push(js("""["modifier",{"id":id,"elements":elements}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendModifierChange(id.value, elements)
   }
 
   override fun appendAdd(
@@ -179,24 +154,21 @@ internal class FastGuestProtocolAdapter(
     index: Int,
     child: ProtocolWidget,
   ) {
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     val childId = child.id.value
     val knownId = widgets.has(childId)
     if (child.removeIndex != INVALID_INDEX) {
       check(hostSupportsRemoveDetach) { "Host v$hostVersion does not support widget re-attach" }
       check(knownId) { "Attempted to re-attach unknown widget with ID $childId" }
       removed.delete(childId)
-
       // Update the object associated with the remove change to indicate it's only a detach.
-      changes[child.removeIndex].asDynamic()[1].detach = true
+      rdmaObj.setRemoveDetach(child.removeIndex)
     } else {
       check(!knownId) { "Attempted to add widget with existing ID $childId" }
       widgets.set(childId, child)
     }
 
-    val id = id
-    val tag = tag
-    val index = index
-    changes.push(js("""["add",{"id":id,"tag":tag,"childId":childId,"index":index}]"""))
+    rdmaObj.appendAdd(id.value, tag.value, childId, index)
   }
 
   override fun appendMove(
@@ -206,12 +178,8 @@ internal class FastGuestProtocolAdapter(
     toIndex: Int,
     count: Int,
   ) {
-    val id = id
-    val tag = tag
-    val fromIndex = fromIndex
-    val toIndex = toIndex
-    val count = count
-    changes.push(js("""["move",{"id":id,"tag":tag,"fromIndex":fromIndex,"toIndex":toIndex,"count":count}]"""))
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendMove(id.value, tag.value, fromIndex, toIndex, count)
   }
 
   override fun appendRemove(
@@ -220,35 +188,28 @@ internal class FastGuestProtocolAdapter(
     index: Int,
     child: ProtocolWidget,
   ) {
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     removed.add(child.id.value)
-    child.removeIndex = changes.length
-
-    val id = id
-    val tag = tag
-    val index = index
-    changes.push(js("""["remove",{"id":id,"tag":tag,"index":index,"count":1}]"""))
+    val rdmaIndex = rdmaObj.changesLength()
+    child.removeIndex = rdmaIndex
+    rdmaObj.appendRemove(id.value, tag.value, index)
   }
 
   override fun emitChanges() {
-    if (changes.length > 0) {
-      removed.forEach { id ->
-        val widget = widgets[id]
-          ?: throw IllegalStateException("Removed widget not present in map: $id")
-        widgets.delete(id)
-        widget.depthFirstWalk(childrenRemover)
-      }
-      removed.clear()
-
-      // RDMA path: direct JNI object creation, bypasses JSON serialization.
-      val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-      if (rdmaObj != undefined) {
-        rdmaObj.sendChanges(changes)
-      } else {
-        throw AssertionError("RDMA changes channel not registered")
-      }
-
-      changes.clear()
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    if (rdmaObj == undefined) {
+      throw AssertionError("RDMA changes channel not registered")
     }
+
+    removed.forEach { id ->
+      val widget = widgets[id]
+        ?: throw IllegalStateException("Removed widget not present in map: $id")
+      widgets.delete(id)
+      widget.depthFirstWalk(childrenRemover)
+    }
+    removed.clear()
+
+    rdmaObj.finishChanges()
   }
 
   private val childrenRemover: ProtocolWidget.ChildrenVisitor =

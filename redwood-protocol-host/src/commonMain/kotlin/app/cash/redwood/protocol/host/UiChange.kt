@@ -26,11 +26,13 @@ import app.cash.redwood.protocol.ModifierChange
 import app.cash.redwood.protocol.PropertyChange
 import app.cash.redwood.protocol.PropertyTag
 import app.cash.redwood.protocol.WidgetTag
+import app.cash.zipline.bridge.support.WithJNIBridge
 
 /**
  * A version of [Change] whose contents have already been deserialized from JSON and is thus
  * cheap to apply on the UI thread.
  */
+@WithJNIBridge
 public sealed interface UiChange {
   public val id: Id
 
@@ -85,6 +87,7 @@ public fun interface UiChangesSink {
 
 /** @suppress */
 @RedwoodCodegenApi
+@WithJNIBridge
 public class UiCreate(
   override val id: Id,
   public val tag: WidgetTag,
@@ -92,6 +95,7 @@ public class UiCreate(
 
 /** @suppress */
 @RedwoodCodegenApi
+@WithJNIBridge
 public class UiPropertyChange(
   override val id: Id,
   public val tag: PropertyTag,
@@ -100,6 +104,7 @@ public class UiPropertyChange(
 
 /** @suppress */
 @RedwoodCodegenApi
+@WithJNIBridge
 public class UiModifierChange(
   override val id: Id,
   public val reuse: Boolean,
@@ -108,6 +113,7 @@ public class UiModifierChange(
 
 /** @suppress */
 @RedwoodCodegenApi
+@WithJNIBridge
 public class UiChildrenChange(
   public val change: ChildrenChange,
 ) : UiChange {

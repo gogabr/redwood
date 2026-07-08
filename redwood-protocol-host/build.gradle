@@ -17,6 +17,7 @@ kotlin {
         api projects.redwoodWidget
         api projects.redwoodLeakDetector
         implementation libs.androidx.collection
+        compileOnly 'io.github.tret9:zipline-bridge-annotations:1.28.0-composelive-0.4-SNAPSHOT'
       }
     }
     commonTest {
@@ -31,6 +32,10 @@ kotlin {
   }
 }
 
+dependencies {
+  kotlinCompilerPluginClasspath 'io.github.tret9:zipline-bridge-kotlin-plugin:1.28.0-composelive-0.4-SNAPSHOT'
+}
+
 buildConfig {
   useKotlinOutput {
     topLevelConstants = true
@@ -42,5 +47,11 @@ buildConfig {
     "app.cash.redwood.protocol.RedwoodVersion",
     "hostRedwoodVersion",
     "RedwoodVersion(\"${project.version}\")",
+  )
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile).configureEach {
+  compilerOptions.freeCompilerArgs.addAll(
+    '-P', "plugin:app.cash.zipline.bridge.kotlin:cOutputDir=${buildDir}/generated/bridge/c"
   )
 }

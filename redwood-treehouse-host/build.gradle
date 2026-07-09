@@ -88,6 +88,14 @@ dependencies {
 android {
   namespace = 'app.cash.treehouse.host'
 
+  externalNativeBuild {
+    cmake {
+      path = file('src/androidMain/cpp/CMakeLists.txt')
+      // libredwood-bridge resolves QuickJS symbols from libquickjs at load time
+      arguments '-DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE'
+    }
+  }
+
   sourceSets {
     androidTest {
       java.srcDir('src/commonTest/kotlin')
@@ -96,6 +104,12 @@ android {
 
   defaultConfig {
     testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+  }
+
+  publishing {
+    singleVariant('release') {
+      withSourcesJar()
+    }
   }
 
   // Needed for unit tests which use ViewCompat whose static fields reference `R.id`s.

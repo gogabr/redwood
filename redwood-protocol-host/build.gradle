@@ -89,7 +89,27 @@ tasks.register('compileBridgeLibrary') {
   def outDir = file("${buildDir}/native")
   def libExt = osSharedLibExtension()
   def outFile = file("${outDir}/libredwood-bridge.${libExt}")
-  def generatedC = fileTree("${buildDir}/generated/bridge/c") { include('*.c') }
+  def hostBridgeDir = file("${buildDir}/generated/bridge/c")
+  def protoBridgeDir = file("${rootProject.projectDir}/redwood-protocol/build/generated/bridge/c")
+  def mergedDir = file("${buildDir}/generated/bridge/merged")
+  def mergedInitFile = file("${mergedDir}/bridge_module_init.c")
+
+  def generatedC = files(
+    fileTree(hostBridgeDir) { include('*.c') exclude('bridge_module_init.c') },
+    fileTree(protoBridgeDir) { include('*.c') exclude('bridge_module_init.c') }
+  )
+
+  // Pre-compute the init function names at configuration time
+  def allSources = files(
+    fileTree(hostBridgeDir) { include('*.c') exclude('bridge_module_init.c') },
+    fileTree(protoBridgeDir) { include('*.c') exclude('bridge_module_init.c') }
+  )
+  def initFunctions = allSources.files
+    .collectMany { src ->
+      src.readLines()
+        .findAll { it =~ /^void [a-z_]+_bridge_init/ }
+        .collect { it.split('\\(|=)')[0].split(' ').last() }
+    }.unique().sort()
   def jniWrapper = file('src/bridge/c/bridge_jni.c')
   // Capture all values at configuration time to avoid closure delegation issues in doLast
   def jniPlatform = jniPlatformDir()
@@ -112,8 +132,17 @@ tasks.register('compileBridgeLibrary') {
 
   doLast {
     outDir.mkdirs()
+    mergedDir.mkdirs()
+    mergedInitFile.text = """#include \"bridge_dispatch.h\"
+${initFunctions.collect { "void ${it}(JSContext *ctx);" }.join('\n')}
+
+void bridge_init_all(JSContext *ctx) {
+${initFunctions.collect { "    ${it}(ctx);" }.join('\n')}
+}
+"""
+
     def cmd = ['cc', '-shared', '-fPIC'] + linkerFlags + includePaths + ['-o', outFile.absolutePath]
-    (generatedC.files + jniWrapper).each { src -> cmd.add(src.absolutePath) }
+    (generatedC.files + jniWrapper + mergedInitFile).each { src -> cmd.add(src.absolutePath) }
     def proc = cmd.execute([], outDir)
     def exitCode = proc.waitFor()
     if (exitCode != 0) {

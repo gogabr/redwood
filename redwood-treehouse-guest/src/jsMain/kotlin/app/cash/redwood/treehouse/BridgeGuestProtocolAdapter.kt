@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Square, Inc.
+ * Copyright (C) 2026
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,37 +30,28 @@ import app.cash.redwood.protocol.guest.ProtocolWidget
 import app.cash.redwood.protocol.guest.ProtocolWidget.Companion.INVALID_INDEX
 import app.cash.redwood.protocol.guest.ProtocolWidgetChildren
 import app.cash.redwood.protocol.guest.ProtocolWidgetSystemFactory
+import app.cash.redwood.protocol.host.UiCreate
 import app.cash.redwood.widget.WidgetSystem
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToDynamic
 
-internal actual fun GuestProtocolAdapter(
-  json: Json,
-  hostVersion: RedwoodVersion,
-  widgetSystemFactory: ProtocolWidgetSystemFactory,
-  mismatchHandler: ProtocolMismatchHandler,
-): GuestProtocolAdapter {
-  val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-  if (rdmaObj != undefined && rdmaObj.appendBridgeChange != undefined) {
-    return BridgeGuestProtocolAdapter(
-      json = json,
-      hostVersion = hostVersion,
-      widgetSystemFactory = widgetSystemFactory,
-      mismatchHandler = mismatchHandler,
-    )
-  }
-  return FastGuestProtocolAdapter(
-    json = json,
-    hostVersion = hostVersion,
-    widgetSystemFactory = widgetSystemFactory,
-    mismatchHandler = mismatchHandler,
-  )
-}
-
-@OptIn(ExperimentalSerializationApi::class, RedwoodCodegenApi::class)
-internal class FastGuestProtocolAdapter(
+/**
+ * A [GuestProtocolAdapter] that constructs bridge-compatible JS [UiChange] objects on the JS side
+ * and sends them via [app.cash.redwood.protocol.BridgeChange] through the RDMA channel.
+ *
+ * When the RDMA global has [appendBridgeChange] available, this adapter constructs JS objects
+ * matching the host-side [UiChange] classes (whose JS prototypes carry [bridge_dispatch] from
+ * [bridge_init_all]) and sends them via [appendBridgeChange]. The C++ host uses
+ * [JniBridgeDispatch] to convert them to JVM [UiChange] objects, wrapping in
+ * [app.cash.redwood.protocol.BridgeChange] for zero-deserialization delivery.
+ *
+ * If [appendBridgeChange] is unavailable, this adapter should not be used;
+ * [FastGuestProtocolAdapter] (scalar RDMA) is the fallback.
+ */
+@OptIn(RedwoodCodegenApi::class, ExperimentalSerializationApi::class)
+internal class BridgeGuestProtocolAdapter(
   override val json: Json = Json.Default,
   hostVersion: RedwoodVersion,
   private val widgetSystemFactory: ProtocolWidgetSystemFactory,
@@ -89,24 +80,22 @@ internal class FastGuestProtocolAdapter(
   override fun initChangesSink(changesSink: ChangesSink) {
   }
 
-  internal fun initChangesSink(
-    changesSinkService: ChangesSinkService,
-    sendChanges: (service: ChangesSinkService, args: Array<*>) -> Any?,
-  ) {
-  }
-
   override fun nextId(): Id {
     val value = nextValue
     nextValue = value + 1
     return Id(value)
   }
 
+  // -- Bridge path: constructs UiCreate JS object and sends via appendBridgeChange --
+
   override fun appendCreate(
     id: Id,
     tag: WidgetTag,
   ) {
+    val change = UiCreate(id, tag)
+    pinnedObjects.push(change)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendCreate(id.value, tag.value)
+    rdmaObj.appendBridgeChange(id.value, change)
   }
 
   override fun appendBridgeChange(
@@ -116,6 +105,8 @@ internal class FastGuestProtocolAdapter(
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     rdmaObj.appendBridgeChange(id.value, wrapped)
   }
+
+  // -- Scalar RDMA path for property/modifier/children changes (not yet bridged) --
 
   override fun <T> appendPropertyChange(
     id: Id,
@@ -152,7 +143,6 @@ internal class FastGuestProtocolAdapter(
 
   override fun appendModifierChange(id: Id, value: Modifier) {
     val elements = js("[]")
-
     value.forEach { element ->
       val (tag, serializer) = widgetSystemFactory.modifierTagAndSerializationStrategy(element)
       when {
@@ -183,13 +173,11 @@ internal class FastGuestProtocolAdapter(
       check(hostSupportsRemoveDetach) { "Host v$hostVersion does not support widget re-attach" }
       check(knownId) { "Attempted to re-attach unknown widget with ID $childId" }
       removed.delete(childId)
-      // Update the object associated with the remove change to indicate it's only a detach.
       rdmaObj.setRemoveDetach(child.removeIndex)
     } else {
       check(!knownId) { "Attempted to add widget with existing ID $childId" }
       widgets.set(childId, child)
     }
-
     rdmaObj.appendAdd(id.value, tag.value, childId, index)
   }
 

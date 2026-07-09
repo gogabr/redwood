@@ -1,4 +1,5 @@
 package app.cash.redwood.treehouse
+import app.cash.redwood.protocol.BridgeChange
 import app.cash.redwood.protocol.ChangesSink
 import app.cash.redwood.protocol.ChildrenChange
 import app.cash.redwood.protocol.ChildrenTag
@@ -40,6 +41,7 @@ public object RdmaBridge : ChangesSink {
         acc.addAll(changes)
     }
     @JvmStatic public fun createCreate(id: Int, tag: Int): Create = Create(Id(id), WidgetTag(tag))
+    @JvmStatic public fun createBridgeChange(id: Int, wrapped: Any?): BridgeChange = BridgeChange(Id(id), wrapped)
     @JvmStatic public fun createAdd(id: Int, tag: Int, childId: Int, index: Int): ChildrenChange = ChildrenChange.Add(Id(id), ChildrenTag(tag), Id(childId), index)
     @JvmStatic public fun createRemove(id: Int, tag: Int, index: Int, detach: Boolean): ChildrenChange = ChildrenChange.Remove(Id(id), ChildrenTag(tag), index, detach)
     @JvmStatic public fun createMove(id: Int, tag: Int, fromIndex: Int, toIndex: Int, count: Int): ChildrenChange = ChildrenChange.Move(Id(id), ChildrenTag(tag), fromIndex, toIndex, count)

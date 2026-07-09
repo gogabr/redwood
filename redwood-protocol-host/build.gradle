@@ -55,3 +55,76 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile).configureEach
     '-P', "plugin:app.cash.zipline.bridge.kotlin:cOutputDir=${buildDir}/generated/bridge/c"
   )
 }
+
+def osSharedLibExtension() {
+  def osName = System.getProperty('os.name').toLowerCase()
+  if (osName.contains('mac') || osName.contains('darwin')) return 'dylib'
+  if (osName.contains('linux')) return 'so'
+  if (osName.contains('windows')) return 'dll'
+  return 'so'
+}
+
+def jniPlatformDir() {
+  def osName = System.getProperty('os.name').toLowerCase()
+  if (osName.contains('mac') || osName.contains('darwin')) return 'darwin'
+  if (osName.contains('linux')) return 'linux'
+  if (osName.contains('windows')) return 'win32'
+  return 'linux'
+}
+
+// Zipline bundles JNI headers under include/unix and include/windows
+def ziplineJniPlatformDir() {
+  def osName = System.getProperty('os.name').toLowerCase()
+  if (osName.contains('windows')) return 'windows'
+  return 'unix'
+}
+
+def jdkIncludeDir = "${System.getProperty('java.home')}/../include"
+def bridgeHeadersPath = "${rootProject.projectDir}/../zipline/zipline/native"
+
+tasks.register('compileBridgeLibrary') {
+  description = 'Compiles generated bridge C files into a shared library'
+  dependsOn('compileKotlinJvm')
+
+  def outDir = file("${buildDir}/native")
+  def libExt = osSharedLibExtension()
+  def outFile = file("${outDir}/libredwood-bridge.${libExt}")
+  def generatedC = fileTree("${buildDir}/generated/bridge/c") { include('*.c') }
+  def jniWrapper = file('src/bridge/c/bridge_jni.c')
+  // Capture all values at configuration time to avoid closure delegation issues in doLast
+  def jniPlatform = jniPlatformDir()
+  def ziplineJniPlatform = ziplineJniPlatformDir()
+  def includePaths = [
+    '-I', jdkIncludeDir,
+    '-I', "${jdkIncludeDir}/${jniPlatform}",
+    '-I', bridgeHeadersPath,
+    '-I', "${bridgeHeadersPath}/include/share",
+    '-I', "${bridgeHeadersPath}/include/${ziplineJniPlatform}",
+    '-I', "${bridgeHeadersPath}/quickjs",
+  ]
+  def linkerFlags = libExt == 'dylib'
+    ? ['-undefined', 'dynamic_lookup']
+    : ['-Wl,--allow-shlib-undefined']
+
+  inputs.files(generatedC)
+  inputs.file(jniWrapper)
+  outputs.file(outFile)
+
+  doLast {
+    outDir.mkdirs()
+    def cmd = ['cc', '-shared', '-fPIC'] + linkerFlags + includePaths + ['-o', outFile.absolutePath]
+    (generatedC.files + jniWrapper).each { src -> cmd.add(src.absolutePath) }
+    def proc = cmd.execute([], outDir)
+    def exitCode = proc.waitFor()
+    if (exitCode != 0) {
+      throw new GradleException("cc failed with exit code $exitCode:\n${proc.err.text}")
+    }
+  }
+}
+
+tasks.named('jvmProcessResources').configure {
+  dependsOn('compileBridgeLibrary')
+  from("${buildDir}/native") {
+    include('*.so', '*.dylib', '*.dll')
+  }
+}

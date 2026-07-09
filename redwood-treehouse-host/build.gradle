@@ -88,14 +88,6 @@ dependencies {
 android {
   namespace = 'app.cash.treehouse.host'
 
-  externalNativeBuild {
-    cmake {
-      path = file('src/androidMain/cpp/CMakeLists.txt')
-      // libredwood-bridge resolves QuickJS symbols from libquickjs at load time
-      arguments '-DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE'
-    }
-  }
-
   sourceSets {
     androidTest {
       java.srcDir('src/commonTest/kotlin')
@@ -104,11 +96,26 @@ android {
 
   defaultConfig {
     testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+    externalNativeBuild {
+      cmake {
+        def ziplineJniDir = file("${rootProject.projectDir}/../zipline/zipline/build/intermediates/library_and_local_jars_jni/release/copyReleaseJniLibsProjectAndLocalJars/jni")
+        arguments '-DANDROID_ALLOW_UNDEFINED_SYMBOLS=TRUE',
+                  "-DQUICKJS_JNI_DIR=${ziplineJniDir.absolutePath}"
+      }
+    }
   }
 
-  publishing {
-    singleVariant('release') {
-      withSourcesJar()
+  externalNativeBuild {
+    cmake {
+      path = file('src/androidMain/cpp/CMakeLists.txt')
+    }
+  }
+
+  // Ensure bridge source files are generated before CMake configure
+  tasks.whenTaskAdded { task ->
+    if (task.name.startsWith('buildCMake') || task.name.contains('ConfigureCMake')) {
+      task.dependsOn(':redwood-protocol-host:mergeBridgeSources')
     }
   }
 

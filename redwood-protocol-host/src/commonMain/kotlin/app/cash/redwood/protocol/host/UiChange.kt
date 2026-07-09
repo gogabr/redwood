@@ -76,7 +76,13 @@ public sealed interface UiChange {
           }
           UiModifierChange(change.id, reuse, modifier)
         }
-        is BridgeChange -> change.wrapped as? UiChange
+        is BridgeChange -> {
+          val result = change.wrapped as? UiChange
+          if (result == null) {
+            println("BRIDGE: BridgeChange.wrapped is null, id=${change.id}")
+          }
+          result
+        }
       }
     }
   }

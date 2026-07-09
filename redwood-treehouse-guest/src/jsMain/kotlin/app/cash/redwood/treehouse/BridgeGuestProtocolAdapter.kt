@@ -30,7 +30,13 @@ import app.cash.redwood.protocol.guest.ProtocolWidget
 import app.cash.redwood.protocol.guest.ProtocolWidget.Companion.INVALID_INDEX
 import app.cash.redwood.protocol.guest.ProtocolWidgetChildren
 import app.cash.redwood.protocol.guest.ProtocolWidgetSystemFactory
+import app.cash.redwood.protocol.host.UiChange
+import app.cash.redwood.protocol.host.UiChildrenChange
 import app.cash.redwood.protocol.host.UiCreate
+import app.cash.redwood.protocol.host.UiModifierChange
+import app.cash.redwood.protocol.host.UiPropertyChange
+import app.cash.redwood.protocol.EventTag
+import app.cash.redwood.protocol.ModifierTag
 import app.cash.redwood.widget.WidgetSystem
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer

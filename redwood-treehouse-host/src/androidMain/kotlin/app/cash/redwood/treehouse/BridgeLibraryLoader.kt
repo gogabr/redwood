@@ -16,8 +16,13 @@ internal object BridgeLibraryLoader {
   fun ensureLoaded() {
     if (loaded) return
     try {
+      val oldPolicy = android.os.StrictMode.allowThreadDiskReads()
+      // Load libquickjs first so its symbols are available for libredwood-bridge
+      try { System.loadLibrary("quickjs") } catch (_: UnsatisfiedLinkError) {}
       System.loadLibrary("redwood-bridge")
+      android.os.StrictMode.setThreadPolicy(oldPolicy)
       loaded = true
+      Log.i("BridgeLibraryLoader", "libredwood-bridge loaded successfully")
     } catch (e: UnsatisfiedLinkError) {
       Log.w("BridgeLibraryLoader", "libredwood-bridge not found — bridge dispatch unavailable", e)
     }

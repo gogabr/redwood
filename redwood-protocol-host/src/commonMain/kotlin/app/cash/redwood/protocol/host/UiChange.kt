@@ -17,6 +17,7 @@ package app.cash.redwood.protocol.host
 
 import app.cash.redwood.Modifier
 import app.cash.redwood.RedwoodCodegenApi
+import app.cash.redwood.protocol.BridgeChange
 import app.cash.redwood.protocol.Change
 import app.cash.redwood.protocol.ChangesSink
 import app.cash.redwood.protocol.ChildrenChange
@@ -75,6 +76,7 @@ public sealed interface UiChange {
           }
           UiModifierChange(change.id, reuse, modifier)
         }
+        is BridgeChange -> change.wrapped as? UiChange
       }
     }
   }

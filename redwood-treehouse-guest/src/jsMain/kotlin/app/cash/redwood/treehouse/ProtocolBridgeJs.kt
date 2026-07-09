@@ -98,6 +98,14 @@ internal class FastGuestProtocolAdapter(
     rdmaObj.appendCreate(id.value, tag.value)
   }
 
+  override fun appendBridgeChange(
+    id: Id,
+    wrapped: Any?,
+  ) {
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendBridgeChange(id.value, wrapped)
+  }
+
   override fun <T> appendPropertyChange(
     id: Id,
     widgetTag: WidgetTag,

@@ -88,6 +88,34 @@ public class Create private constructor(
   }
 }
 
+/**
+ * A [Change] that wraps a pre-deserialized host-side value directly, bypassing JSON
+ * serialisation. The wrapped value is set by the bridge (JNI or other direct transport)
+ * and extracted by [app.cash.redwood.protocol.host.UiChange.fromProtocol].
+ *
+ * This class is marked [Serializable] solely to satisfy the sealed hierarchy contract;
+ * serialization should never be used in practice — [wrapped] is [Transient].
+ */
+@Serializable
+@SerialName("bridge")
+@Poko
+public class BridgeChange private constructor(
+  @SerialName("id")
+  private val _id: Int,
+) : Change {
+  override val id: Id get() = Id(_id)
+
+  @kotlinx.serialization.Transient
+  public var wrapped: Any? = null
+
+  public companion object {
+    public operator fun invoke(
+      id: Id,
+      wrapped: Any? = null,
+    ): BridgeChange = BridgeChange(id.value).apply { this.wrapped = wrapped }
+  }
+}
+
 public sealed interface ValueChange : Change
 
 @Serializable

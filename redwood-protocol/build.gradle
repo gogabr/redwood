@@ -35,3 +35,23 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile).configureEach
     '-P', "plugin:app.cash.zipline.bridge.kotlin:cOutputDir=${buildDir}/generated/bridge/c"
   )
 }
+
+// Copy plugin-generated BridgeRegistry.kt to a per-module sub-package to avoid
+// __bridge_fqns conflicts when multiple annotated modules are compiled together.
+// defineJs.kt scans all sub-packages of 'generated' for __bridge_fqns at runtime.
+tasks.register('copyBridgeRegistryKt', Copy) {
+  dependsOn('compileKotlinJvm')
+  from("${buildDir}/generated/bridge/c") {
+    include('BridgeRegistry.kt')
+    filter { line ->
+      line.replace('package app.cash.zipline.bridge.generated',
+                   'package app.cash.zipline.bridge.generated.proto')
+    }
+  }
+  into("${buildDir}/generated/bridge/kt-src/app/cash/zipline/bridge/generated/proto")
+}
+kotlin.sourceSets.jsMain {
+  kotlin.srcDir("${buildDir}/generated/bridge/kt-src")
+}
+tasks.named('compileKotlinJs').configure { dependsOn('copyBridgeRegistryKt') }
+tasks.named('jsSourcesJar').configure { dependsOn('copyBridgeRegistryKt') }

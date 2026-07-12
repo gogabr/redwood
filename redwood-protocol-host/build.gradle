@@ -215,16 +215,25 @@ tasks.register('compileBridgeLibrary') {
   }
 }
 
-// Copy plugin-generated BridgeRegistry.kt to a build/ dir (gitignored) and add as JS source
+// Copy plugin-generated BridgeRegistry.kt to a per-module sub-package to avoid
+// __bridge_fqns conflicts when multiple annotated modules are compiled together.
+// defineJs.kt scans all sub-packages of 'generated' for __bridge_fqns at runtime.
 tasks.register('copyBridgeRegistryKt', Copy) {
   dependsOn('compileKotlinJvm')
-  from("${buildDir}/generated/bridge/c") { include('BridgeRegistry.kt') }
-  into("${buildDir}/generated/bridge/kt-src/app/cash/zipline/bridge/generated")
+  from("${buildDir}/generated/bridge/c") {
+    include('BridgeRegistry.kt')
+    filter { line ->
+      line.replace('package app.cash.zipline.bridge.generated',
+                   'package app.cash.zipline.bridge.generated.host')
+    }
+  }
+  into("${buildDir}/generated/bridge/kt-src/app/cash/zipline/bridge/generated/host")
 }
 kotlin.sourceSets.jsMain {
   kotlin.srcDir("${buildDir}/generated/bridge/kt-src")
 }
 tasks.named('compileKotlinJs').configure { dependsOn('copyBridgeRegistryKt') }
+tasks.named('jsSourcesJar').configure { dependsOn('copyBridgeRegistryKt') }
 
 // Merge bridge_fqns.txt from all modules into a Kotlin constant.
 // The output goes to Zipline's hostMain generated sources.
@@ -249,7 +258,7 @@ tasks.register('mergeBridgeFqns') {
 package app.cash.zipline.internal
 
 internal val BRIDGE_FQNS: List<String> = listOf(
-${allFqns.collect { "    \"$it\"" }.joinToString(",\n")}
+${allFqns.collect { "    \"$it\"" }.join(",\n")}
 )
 """
   }

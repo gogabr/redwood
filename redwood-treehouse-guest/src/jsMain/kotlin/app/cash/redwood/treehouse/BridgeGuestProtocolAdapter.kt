@@ -18,6 +18,7 @@ package app.cash.redwood.treehouse
 import app.cash.redwood.Modifier
 import app.cash.redwood.RedwoodCodegenApi
 import app.cash.redwood.protocol.ChangesSink
+import app.cash.redwood.protocol.ChildrenChange
 import app.cash.redwood.protocol.ChildrenTag
 import app.cash.redwood.protocol.Event
 import app.cash.redwood.protocol.Id
@@ -67,6 +68,8 @@ internal class BridgeGuestProtocolAdapter(
   private val widgets = JsMap<Int, ProtocolWidget>()
   private val removed = JsSet<Int>()
   private var pinnedObjects: dynamic = js("[]")
+  /** Tracks [ChildrenChange.Remove] JS objects by index for re-attach ([setRemoveDetach]). */
+  private val pendingRemoveObjects = mutableListOf<dynamic>()
 
   override val widgetSystem: WidgetSystem<Unit> =
     widgetSystemFactory.create(this, mismatchHandler)
@@ -112,7 +115,7 @@ internal class BridgeGuestProtocolAdapter(
     rdmaObj.appendBridgeChange(id.value, wrapped)
   }
 
-  // -- Scalar RDMA path for property/modifier/children changes (not yet bridged) --
+  // -- Scalar RDMA path for property/modifier changes (not yet bridged) --
 
   override fun <T> appendPropertyChange(
     id: Id,
@@ -172,19 +175,23 @@ internal class BridgeGuestProtocolAdapter(
     index: Int,
     child: ProtocolWidget,
   ) {
-    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    val childId = child.id.value
-    val knownId = widgets.has(childId)
+    val childId = child.id
+    val knownId = widgets.has(childId.value)
     if (child.removeIndex != INVALID_INDEX) {
       check(hostSupportsRemoveDetach) { "Host v$hostVersion does not support widget re-attach" }
       check(knownId) { "Attempted to re-attach unknown widget with ID $childId" }
-      removed.delete(childId)
-      rdmaObj.setRemoveDetach(child.removeIndex)
+      removed.delete(childId.value)
+      // Mark the pending Remove as detach so the host retains the widget subtree.
+      pendingRemoveObjects[child.removeIndex].detach = true
     } else {
       check(!knownId) { "Attempted to add widget with existing ID $childId" }
-      widgets.set(childId, child)
+      widgets.set(childId.value, child)
     }
-    rdmaObj.appendAdd(id.value, tag.value, childId, index)
+    val protocolChange = ChildrenChange.Add(id, tag, childId, index)
+    val uiChange = UiChildrenChange(protocolChange)
+    pinnedObjects.push(uiChange)
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendBridgeChange(id.value, uiChange)
   }
 
   override fun appendMove(
@@ -194,8 +201,11 @@ internal class BridgeGuestProtocolAdapter(
     toIndex: Int,
     count: Int,
   ) {
+    val protocolChange = ChildrenChange.Move(id, tag, fromIndex, toIndex, count)
+    val uiChange = UiChildrenChange(protocolChange)
+    pinnedObjects.push(uiChange)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendMove(id.value, tag.value, fromIndex, toIndex, count)
+    rdmaObj.appendBridgeChange(id.value, uiChange)
   }
 
   override fun appendRemove(
@@ -204,11 +214,15 @@ internal class BridgeGuestProtocolAdapter(
     index: Int,
     child: ProtocolWidget,
   ) {
-    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
     removed.add(child.id.value)
-    val rdmaIndex = rdmaObj.changesLength()
-    child.removeIndex = rdmaIndex
-    rdmaObj.appendRemove(id.value, tag.value, index)
+    val protocolChange = ChildrenChange.Remove(id, tag, index, detach = false)
+    pinnedObjects.push(protocolChange)
+    child.removeIndex = pendingRemoveObjects.size
+    pendingRemoveObjects.add(protocolChange)
+    val uiChange = UiChildrenChange(protocolChange)
+    pinnedObjects.push(uiChange)
+    val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
+    rdmaObj.appendBridgeChange(id.value, uiChange)
   }
 
   override fun emitChanges() {
@@ -226,6 +240,7 @@ internal class BridgeGuestProtocolAdapter(
     removed.clear()
 
     rdmaObj.finishChanges()
+    pendingRemoveObjects.clear()
     pinnedObjects = js("[]")
   }
 

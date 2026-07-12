@@ -29,6 +29,7 @@ import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
+import app.cash.zipline.bridge.support.WithJNIBridge
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -216,6 +217,7 @@ public sealed interface ChildrenChange : Change {
 
   @Serializable
   @SerialName("add")
+  @WithJNIBridge
   @Poko
   public class Add private constructor(
     @SerialName("id")
@@ -242,6 +244,7 @@ public sealed interface ChildrenChange : Change {
 
   @Serializable
   @SerialName("move")
+  @WithJNIBridge
   @Poko
   public class Move private constructor(
     @SerialName("id")
@@ -268,6 +271,7 @@ public sealed interface ChildrenChange : Change {
 
   @Serializable
   @SerialName("remove")
+  @WithJNIBridge
   @Poko
   public class Remove private constructor(
     @SerialName("id")

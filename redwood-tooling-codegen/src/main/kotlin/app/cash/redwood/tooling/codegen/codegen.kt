@@ -32,17 +32,20 @@ public enum class CodegenType {
   WidgetComposeUi,
 }
 
-public fun SchemaSet.generate(type: CodegenType, destination: Path) {
-  for (fileSpec in generateFileSpecs(type)) {
+public fun SchemaSet.generate(type: CodegenType, destination: Path, bridgeJvmPackage: String? = null) {
+  for (fileSpec in generateFileSpecs(type, bridgeJvmPackage)) {
     fileSpec.writeTo(destination)
   }
 }
 
-internal fun SchemaSet.generateFileSpecs(type: CodegenType): List<FileSpec> {
+internal fun SchemaSet.generateFileSpecs(type: CodegenType, bridgeJvmPackage: String? = null): List<FileSpec> {
   return buildList {
     when (type) {
       Compose -> {
-        generateModifierImpls(schema)?.let { add(it) }
+        generateModifierImpls(schema, bridgeJvmPackage)?.let { add(it) }
+        if (!bridgeJvmPackage.isNullOrEmpty()) {
+          add(generateBridgeRegistry(schema, bridgeJvmPackage))
+        }
         generateUnscopedModifiers(schema)?.let { add(it) }
         for (scope in schema.scopes) {
           add(generateModifierScope(schema, scope))

@@ -151,22 +151,10 @@ internal class BridgeGuestProtocolAdapter(
   }
 
   override fun appendModifierChange(id: Id, value: Modifier) {
-    val elements = js("[]")
-    value.forEach { element ->
-      val (tag, serializer) = widgetSystemFactory.modifierTagAndSerializationStrategy(element)
-      when {
-        serializer != null -> {
-          val value = json.encodeToDynamic(serializer, element)
-          elements.push(js("""[tag,value]"""))
-        }
-        else -> {
-          elements.push(js("""[tag]"""))
-        }
-      }
-    }
-    pinnedObjects.push(elements)
+    val uiChange = UiModifierChange(id, reuse = false, value)
+    pinnedObjects.push(uiChange)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendModifierChange(id.value, elements)
+    rdmaObj.appendBridgeChange(id.value, uiChange)
   }
 
   override fun appendAdd(

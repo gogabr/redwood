@@ -757,6 +757,7 @@ internal fun generateProtocolModifierImpls(
       }
       addType(
         typeBuilder
+          .addAnnotation(ClassName("app.cash.zipline.bridge.support", "WithJNIBridge"))
           .addModifiers(INTERNAL)
           .addSuperinterface(modifierSchema.modifierType(modifier))
           .addFunction(modifierEquals(modifierSchema, modifier))

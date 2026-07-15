@@ -14,11 +14,21 @@ include_directories(
 # Generated bridge C files
 set(BRIDGE_PROTO "${CMAKE_CURRENT_SOURCE_DIR}/../../../../redwood-protocol/build/generated/bridge/c")
 set(BRIDGE_HOST  "${CMAKE_CURRENT_SOURCE_DIR}/../../../../redwood-protocol-host/build/generated/bridge/c")
+set(BRIDGE_RUNTIME "${CMAKE_CURRENT_SOURCE_DIR}/../../../../redwood-runtime/build/generated/bridge/c")
 set(BRIDGE_MERGED "${CMAKE_CURRENT_SOURCE_DIR}/../../../../redwood-protocol-host/build/generated/bridge/merged")
+# Compose-live protocol-host modules also generate bridge C code.
+# Redwood is at ${CMAKE_CURRENT_SOURCE_DIR}/../../../.. (4 levels up from cpp).
+# Compose-live is a sibling of redwood: one more level up + compose-live.
+# Only ru.wildberries.* modules are used; io.composelive.standard.* is a separate variant.
+set(BRIDGE_CL_WB "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../compose-live/wb/nodes/main/generated/protocol-host/build/generated/bridge/c")
+set(BRIDGE_CL_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../compose-live/core/nodes/foundation/common/build/generated/bridge/c")
 
 file(GLOB bridge_sources
     "${BRIDGE_PROTO}/app_cash_redwood_protocol_*.c"
     "${BRIDGE_HOST}/app_cash_redwood_protocol_host_*.c"
+    "${BRIDGE_RUNTIME}/app_cash_redwood_*.c"
+    "${BRIDGE_CL_WB}/ru_wildberries_composelive_nodes_main_protocol_host_foundation_*.c"
+    "${BRIDGE_CL_COMMON}/io_composelive_nodes_foundation_common_*.c"
     "${BRIDGE_MERGED}/bridge_module_init.c"
 )
 

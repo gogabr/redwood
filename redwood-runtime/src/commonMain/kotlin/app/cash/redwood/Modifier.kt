@@ -17,6 +17,7 @@
 package app.cash.redwood
 
 import androidx.compose.runtime.Stable
+import app.cash.zipline.bridge.support.WithJNIBridge
 import kotlin.native.ObjCName
 
 /**
@@ -96,6 +97,7 @@ public interface Modifier {
   // The companion object implements `Modifier` so that it may be used as the start of a
   // modifier extension factory expression.
   @ObjCName("EmptyModifier", exact = true)
+  @WithJNIBridge
   public companion object : Modifier {
     override fun forEach(block: (Element) -> Unit) {}
     override fun forEachScoped(block: (ScopedElement) -> Unit) {}
@@ -105,9 +107,10 @@ public interface Modifier {
   }
 }
 
-private class CombinedModifier(
-  private val outer: Modifier,
-  private val inner: Modifier,
+@WithJNIBridge
+public class CombinedModifier(
+  public val outer: Modifier,
+  public val inner: Modifier,
 ) : Modifier {
   override fun forEach(block: (Modifier.Element) -> Unit) {
     outer.forEach(block)

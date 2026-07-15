@@ -24,6 +24,7 @@ import app.cash.redwood.tooling.schema.Widget.Children
 import app.cash.redwood.tooling.schema.Widget.Event
 import app.cash.redwood.tooling.schema.Widget.Property
 import com.squareup.kotlinpoet.ANY
+import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
@@ -248,15 +249,65 @@ internal class SomethingImpl(...): Something {
   public override fun toString(): String = ...
 }
 */
-internal fun generateModifierImpls(schema: Schema): FileSpec? {
+internal fun generateModifierImpls(schema: Schema, bridgeJvmPackage: String? = null): FileSpec? {
   if (schema.modifiers.isEmpty()) return null
 
   return buildFileSpec(schema.composePackage(), "modifier") {
     addAnnotation(suppressDeprecations)
 
     for (modifier in schema.modifiers) {
-      addType(generateModifierImpl(schema, modifier))
+      addType(generateModifierImpl(schema, modifier, bridgeJvmPackage))
     }
+  }
+}
+
+/**
+ * When [bridgeJvmPackage] is set, generates `BridgeRegistry.kt` in the compose package
+ * with a `@JsExport @JsName("__bridgeInit")` function that registers each modifier Impl's
+ * JS constructor under its JVM-side FQN (via `@WithJNIBridge.targetFqn`).
+ */
+internal fun generateBridgeRegistry(
+  schema: Schema,
+  bridgeJvmPackage: String,
+): FileSpec {
+  return buildFileSpec(schema.composePackage(), "BridgeRegistry") {
+    addAnnotation(AnnotationSpec.builder(Suppress::class)
+      .addMember("%S", "OPT_IN_USAGE_ERROR")
+      .build())
+
+    addImport("kotlin.js", "JsExport")
+    addImport("kotlin.js", "JsName")
+
+    val bridgeInitFun = FunSpec.builder("bridgeInitReg")
+      .addAnnotation(ClassName("kotlin.js", "JsExport"))
+      .addAnnotation(
+        AnnotationSpec.builder(ClassName("kotlin.js", "JsName"))
+          .addMember("%S", "__bridgeInit")
+          .build()
+      )
+      .addAnnotation(
+        AnnotationSpec.builder(Suppress::class)
+          .addMember("%S", "unused")
+          .addMember("%S", "NON_EXPORTABLE_TYPE")
+          .build()
+      )
+      .addModifiers(PUBLIC)
+      .addStatement(
+        "val _b: dynamic = js(%S)",
+        "typeof globalThis.__bridgeRegister === 'function' ? globalThis.__bridgeRegister : null"
+      )
+      .addStatement("if (_b != null) {")
+      .apply {
+        for (modifier in schema.modifiers) {
+          val implName = "${modifier.type.flatName}Impl"
+          val targetFqn = "$bridgeJvmPackage.$implName"
+          addStatement("  _b(%S, (%L::class).js)", targetFqn, implName)
+        }
+      }
+      .addStatement("}")
+      .build()
+
+    addFunction(bridgeInitFun)
   }
 }
 
@@ -296,6 +347,7 @@ private fun generateModifierFunction(
 private fun generateModifierImpl(
   schema: Schema,
   modifier: Modifier,
+  bridgeJvmPackage: String? = null,
 ): TypeSpec {
   val typeName = schema.modifierImpl(modifier)
   val typeBuilder = if (modifier.properties.isEmpty()) {
@@ -318,7 +370,17 @@ private fun generateModifierImpl(
       }
   }
 
+  // Build @WithJNIBridge annotation, optionally with targetFqn for cross-package JS→JVM mapping.
+  val bridgeAnnotation = AnnotationSpec.builder(
+    ClassName("app.cash.zipline.bridge.support", "WithJNIBridge")
+  )
+  if (!bridgeJvmPackage.isNullOrEmpty()) {
+    val targetFqn = "$bridgeJvmPackage.${modifier.type.flatName}Impl"
+    bridgeAnnotation.addMember("targetFqn = %S", targetFqn)
+  }
+
   return typeBuilder
+    .addAnnotation(bridgeAnnotation.build())
     .addModifiers(INTERNAL)
     .addSuperinterface(schema.modifierType(modifier))
     .addFunction(modifierEquals(schema, modifier))

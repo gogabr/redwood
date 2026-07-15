@@ -26,4 +26,12 @@ public abstract class RedwoodSchemaExtension {
    * The default is true.
    */
   public abstract val apiTracking: Property<Boolean>
+
+  /**
+   * When set, the compose codegen emits `BridgeRegistry.kt` for JNI bridge support,
+   * registering each modifier Impl's JS constructor under the given JVM package FQN.
+   * The JVM side must have corresponding bridge C code generated (via the zipline bridge
+   * plugin with `cOutputDir` on a JVM-target module).
+   */
+  public abstract val bridgeJvmPackage: Property<String>
 }

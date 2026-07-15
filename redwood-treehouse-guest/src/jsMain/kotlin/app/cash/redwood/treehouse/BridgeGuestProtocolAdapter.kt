@@ -115,7 +115,7 @@ internal class BridgeGuestProtocolAdapter(
     rdmaObj.appendBridgeChange(id.value, wrapped)
   }
 
-  // -- Scalar RDMA path for property/modifier changes (not yet bridged) --
+  // -- Bridge path for property changes --
 
   override fun <T> appendPropertyChange(
     id: Id,
@@ -124,10 +124,10 @@ internal class BridgeGuestProtocolAdapter(
     serializer: KSerializer<T>,
     value: T,
   ) {
-    val encodedValue = value?.let { json.encodeToDynamic(serializer, it) }
-    pinnedObjects.push(encodedValue)
+    val change = UiPropertyChange(id, propertyTag, value)
+    pinnedObjects.push(change)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, encodedValue)
+    rdmaObj.appendBridgeChange(id.value, change)
   }
 
   override fun appendPropertyChange(
@@ -136,8 +136,10 @@ internal class BridgeGuestProtocolAdapter(
     propertyTag: PropertyTag,
     value: Boolean,
   ) {
+    val change = UiPropertyChange(id, propertyTag, value)
+    pinnedObjects.push(change)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, value)
+    rdmaObj.appendBridgeChange(id.value, change)
   }
 
   override fun appendPropertyChange(
@@ -146,8 +148,10 @@ internal class BridgeGuestProtocolAdapter(
     propertyTag: PropertyTag,
     value: UInt,
   ) {
+    val change = UiPropertyChange(id, propertyTag, value)
+    pinnedObjects.push(change)
     val rdmaObj: dynamic = js("globalThis.app_cash_redwood_rdmaSendChanges")
-    rdmaObj.appendPropertyChange(id.value, widgetTag.value, propertyTag.value, value.toLong())
+    rdmaObj.appendBridgeChange(id.value, change)
   }
 
   override fun appendModifierChange(id: Id, value: Modifier) {

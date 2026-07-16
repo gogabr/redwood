@@ -98,6 +98,7 @@ tasks.register('mergeBridgeSources') {
   def commonBridgeDir = file("${composeLiveRoot}/core/nodes/foundation/common/build/generated/bridge/c")
   def mergedDir = file("${buildDir}/generated/bridge/merged")
   def mergedInitFile = file("${mergedDir}/bridge_module_init.c")
+  def cmakeSnippetFile = file("${mergedDir}/compose_live_sources.cmake")
 
   // Capture bridge_module_init.c from each module at configuration time (for config-cache compat).
   def hostBridgeInitFiles = fileTree(hostBridgeDir) { include('bridge_module_init.c') }.files
@@ -106,7 +107,12 @@ tasks.register('mergeBridgeSources') {
   inputs.files(
     fileTree(hostBridgeDir) { include('*.c') exclude('bridge_module_init.c') },
     fileTree(protoBridgeDir) { include('*.c') exclude('bridge_module_init.c') },
-    fileTree(runtimeBridgeDir) { include('*.c') exclude('bridge_module_init.c') }
+    fileTree(runtimeBridgeDir) { include('*.c') exclude('bridge_module_init.c') },
+    // Compose-live bridge C sources — track them so the merge task re-runs
+    // when they change. Directories may not exist yet at configuration time;
+    // fileTree gracefully handles missing dirs.
+    fileTree(wbProtoBridgeDir) { include('*.c') },
+    fileTree(commonBridgeDir) { include('*.c') }
   )
   outputs.file(mergedInitFile)
 
@@ -194,6 +200,33 @@ void init_all(JNIEnv *env) {
 ${initCalls.collect { "    ${it}(env);" }.join('\n')}
 }
 """
+
+    // Generate a CMake snippet listing compose-live C files discovered at
+    // execution time. CMakeLists.txt includes this instead of file(GLOB) so
+    // it always sees the files that exist when the merge task ran.
+    def wbSources = []
+    def commonSources = []
+    if (wbProtoBridgeDir.exists()) {
+      wbProtoBridgeDir.eachFileMatch(~/.*\.c/) {
+        if (!it.name.equals('bridge_module_init.c')) wbSources << it.absolutePath
+      }
+    }
+    if (commonBridgeDir.exists()) {
+      commonBridgeDir.eachFileMatch(~/.*\.c/) {
+        if (!it.name.equals('bridge_module_init.c')) commonSources << it.absolutePath
+      }
+    }
+    cmakeSnippetFile.text = ""
+    if (wbSources) {
+      cmakeSnippetFile.text += "set(CL_WB_SOURCES\n"
+      wbSources.each { cmakeSnippetFile.text += "    \"${it}\"\n" }
+      cmakeSnippetFile.text += ")\n"
+    }
+    if (commonSources) {
+      cmakeSnippetFile.text += "set(CL_COMMON_SOURCES\n"
+      commonSources.each { cmakeSnippetFile.text += "    \"${it}\"\n" }
+      cmakeSnippetFile.text += ")\n"
+    }
   }
 }
 

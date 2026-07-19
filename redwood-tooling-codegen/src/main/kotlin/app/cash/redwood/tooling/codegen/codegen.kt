@@ -43,9 +43,6 @@ internal fun SchemaSet.generateFileSpecs(type: CodegenType, bridgeJvmPackage: St
     when (type) {
       Compose -> {
         generateModifierImpls(schema, bridgeJvmPackage)?.let { add(it) }
-        if (!bridgeJvmPackage.isNullOrEmpty()) {
-          add(generateBridgeRegistry(schema, bridgeJvmPackage))
-        }
         generateUnscopedModifiers(schema)?.let { add(it) }
         for (scope in schema.scopes) {
           add(generateModifierScope(schema, scope))

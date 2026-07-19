@@ -112,10 +112,12 @@ android {
     }
   }
 
-  // Ensure bridge source files are generated before CMake configure
+  // Ensure bridge source files are generated before CMake configure.
+  // mergeAllBridgeSources waits for all JVM compilations (redwood + compose-live),
+  // then overwrites the merged bridge_module_init.c with complete table entries.
   tasks.whenTaskAdded { task ->
     if (task.name.startsWith('buildCMake') || task.name.contains('ConfigureCMake')) {
-      task.dependsOn(':redwood-protocol-host:mergeBridgeSources')
+      task.dependsOn(':redwood-protocol-host:mergeAllBridgeSources')
     }
   }
 

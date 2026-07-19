@@ -45,6 +45,9 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile).configureEach
     '-P', "plugin:app.cash.zipline.bridge.kotlin:cOutputDir=${buildDir}/generated/bridge/c",
   )
 }
+tasks.named('compileKotlinJvm').configure {
+  outputs.dir("${buildDir}/generated/bridge/c")
+}
 
 kotlin.sourceSets.jsMain {
   kotlin.srcDir("${buildDir}/generated/bridge/c")

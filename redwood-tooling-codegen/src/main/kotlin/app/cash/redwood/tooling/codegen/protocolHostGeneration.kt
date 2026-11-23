@@ -276,6 +276,7 @@ internal fun generateProtocolNode(
           nextSerializerId++
         }
       }
+
       is ProtocolEvent -> {
         serializerIds.computeIfAbsent(BOOLEAN) {
           nextSerializerId++
@@ -286,6 +287,7 @@ internal fun generateProtocolNode(
           }
         }
       }
+
       is ProtocolChildren -> {
         // Nothing to do!
       }
